@@ -1,0 +1,9 @@
+{
+	"Name": "br",
+	"Authors": ["kiwidog"],
+	"Description": "Battle Royale Mod",
+	"URL": "none",
+	"Version": "0",
+	"HasWebUI": false,
+	"HasVeniceEXT": true
+}
