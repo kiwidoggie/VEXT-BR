@@ -34,7 +34,7 @@ function BRServer:__init()
     self.m_CurrentRingStatus = FirestormShared.G_RING_STATIONARY
     self.m_CurrentRingMinimumRadius = 1.0      -- Minimum radius of the ring
     self.m_CurrentRingRadius = 25.0    -- Current radius of the ring
-    self.m_CurrentRingNumPoints = 16    -- Number of points around the ring
+    self.m_CurrentRingNumPoints = 30    -- Number of points around the ring
 end
 
 function BRServer:OnEngineUpdate(p_DeltaTime, p_SimulationDeltaTime)

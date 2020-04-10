@@ -10,6 +10,9 @@ function BRClient:__init()
     -- Subscribe to the server event
     self.m_RadiusUpdateEvent = NetEvents:Subscribe("BR:UpdateRadius", self, self.OnUpdateRadius)
     self.m_UpdateStatsEvent = NetEvents:Subscribe("BR:UpdateState", self, self.OnUpdateState)
+    self.m_ExtensionUnloadingEvent = Events:Subscribe("Extension:Unloading", self, self.OnExtensionUnloading)
+    self.m_LevelLoadingInfoEvent = Events:Subscribe("Level:LoadingInfo", self, self.OnLevelLoadingInfo)
+    --self.m_PartitionLoadedEvent = Events:Subscribe("Partition:Loaded", self, self.OnPartitionLoaded)
 
     -- Engine events
 
@@ -37,9 +40,30 @@ function BRClient:__init()
     self.m_Bundles = { }
 
     self.m_LevelName = ""
+
+    self.m_Ready = false
+end
+
+function BRClient:OnLevelLoadingInfo(p_Info)
+    if p_Info == "Loading done" then
+        print("updating ready status")
+        self.m_Ready = true
+    elseif p_Info == "Level exited" then
+        print("updating unready status")
+        self.m_Ready = false
+    end
+end
+
+function BRClient:OnExtensionUnloading()
+    self:StopPlayingAllEffects()
 end
 
 function BRClient:GetEffectBlueprint()
+    -- Wait until we get the ready status
+    if self.m_Ready == false then
+        return
+    end
+
     -- Check to see if we already got the blueprint
     if self.m_FireEffectBlueprint ~= nil then
         return self.m_FireEffectBlueprint
@@ -99,7 +123,7 @@ function BRClient:GetEffectBlueprint()
         l_Emitter:MakeWritable()
 
         -- Change the maximum count of this emitter
-        --l_Emitter.maxCount = 91
+        l_Emitter.maxCount = 512
 
         print("changed emitter: " .. l_Emitter.name .. " max count to: " .. l_Emitter.maxCount)
 
@@ -132,6 +156,10 @@ function BRClient:OnUpdateRadius(p_NewRadius, p_NewPosition, p_NumPoints)
     self.m_CurrentRingRadius = p_NewRadius
     self.m_CurrentRingPosition = p_NewPosition
 
+    if self.m_Ready == false then
+        return
+    end
+
     -- We only want to proceed if the effect is found
     local s_EffectBlueprint = self:GetEffectBlueprint()
     if s_EffectBlueprint == nil then
@@ -152,7 +180,10 @@ function BRClient:OnUpdateRadius(p_NewRadius, p_NewPosition, p_NumPoints)
 
             -- Play the effect
             --print("playing effect at x: " .. l_Vec.x .. " y: " .. l_Vec.y .. " z: " .. l_Vec.z)
+            --print("fireeffectblueprint: " .. self.m_FireEffectBlueprint)
+            --print("effectparams: " .. self.m_EffectParams)
             local l_EffectHandle = EffectManager:PlayEffect(self.m_FireEffectBlueprint, l_Transform, self.m_EffectParams, true)
+            print("effectHandle: " .. l_EffectHandle)
             if EffectManager:IsEffectPlaying(l_EffectHandle) == false then
                 print("could not play effect")
                 goto effect_continue
