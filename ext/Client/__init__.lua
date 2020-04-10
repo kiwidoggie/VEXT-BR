@@ -1,7 +1,6 @@
 class "BRClient"
 
-FirestormShared = require "__shared/FirestormShared"
-FirestormClient = require "FirestormClient"
+--FirestormShared = require("__shared/FirestormShared")
 
 function BRClient:__init()
     -- Debug output
@@ -10,18 +9,9 @@ function BRClient:__init()
     -- BR:RadiusUpdate([float] p_NewRadius, [Vec3] p_NewPosition)
     -- Subscribe to the server event
     self.m_RadiusUpdateEvent = NetEvents:Subscribe("BR:UpdateRadius", self, self.OnUpdateRadius)
-    self.m_RoundStartEvent = NetEvents:Subscribe("BR:RoundStart", self, self.OnRoundStart)
-    self.m_RoundEndEvent = NetEvents:Subscribe("BR:RoundEnd", self, self.OnRoundEnd)
     self.m_UpdateStatsEvent = NetEvents:Subscribe("BR:UpdateState", self, self.OnUpdateState)
 
-    -- Engine update events
-    self.m_EngineUpdateEvent = Events:Subscribe("Engine:Update", self, self.OnEngineUpdate)
-
-    -- Timer that gets added to each engine update (deltaTime gets added)
-    self.m_UpdateTimer = 0.0
-
-    -- Update tick frequency (default: 1 second)
-    self.m_UpdateFreq = 2.0
+    -- Engine events
 
     -- Hold ring information, this is updated by the server
     self.m_CurrentRingRadius = 0.0
@@ -38,87 +28,168 @@ function BRClient:__init()
     self.m_RaycastStartHeight = 500.0
 
     -- Hold our ring of fire
-    self.m_FireEntity = nil
+    self.m_FireEffectBlueprint = nil
     self.m_EffectParams = EffectParams()
 
     -- Initialize all of the handles
     self.m_EffectHandles = { }
 
-    self.m_FirestormClient = FirestormClient()
+    self.m_Bundles = { }
+
+    self.m_LevelName = ""
 end
 
-function BRClient:PopulateEffectHandles(p_Count)
-    for l_EffectIndex = 0, self.m_CurrentRingNumPoints do
-        l_EffectHandle = self.m_EffectHandles[l_EffectIndex]
+function BRClient:GetEffectBlueprint()
+    -- Check to see if we already got the blueprint
+    if self.m_FireEffectBlueprint ~= nil then
+        return self.m_FireEffectBlueprint
+    end
 
-        -- Stop the effect from playing
-        if l_EffectHandle ~= nil then
-            EffectManager:StopEffect(l_EffectHandle)
+    -- Get the EffectBlueprint FX/Ambient/Generic/FireSmoke/Fire/Generic/FX_Amb_Generic_Fire_L_01
+    s_FireEffectResource = ResourceManager:SearchForInstanceByGUID(Guid('392D298D-CD2D-498F-AF2E-2C2F5B2AF137'))
+    if s_FireEffectResource == nil then
+        print("could not find fire effect resource")
+        return nil
+    end
+
+    print("get effect blueprint")
+    s_FireEffectBlueprint = EffectBlueprint(s_FireEffectResource)
+    if s_FireEffectBlueprint == nil then
+        print("could not find fire effect blueprint")
+        return nil
+    end
+
+    print("assigning the effect blueprint")
+    self.m_FireEffectBlueprint = s_FireEffectBlueprint
+
+    -- Modify the effect entity data
+    local s_EffectEntityData = EffectEntityData(s_FireEffectBlueprint.object)
+    if s_EffectEntityData == nil then
+        print("err: could not get effect entity data")
+        return s_FireEffectBlueprint
+    end
+
+    for _, l_EntityData in pairs(s_EffectEntityData.components) do
+        -- Check to make sure we have a valid entity data
+        if l_EntityData == nil then
+            goto emitter_entity_data_continue
         end
 
-        -- Remove the effect handle from the list
-        self.m_EffectHandles[l_EffectIndex] = nil
+        -- We only want the emitter entity datas
+        if l_EntityData.typeInfo.name ~= "EmitterEntityData" then
+            goto emitter_entity_data_continue
+        end
+
+        local l_EmitterEntityData = EmitterEntityData(l_EntityData)
+
+        -- Get the emitter document
+        local l_EmitterDocument = EmitterDocument(l_EmitterEntityData.emitter)
+        if l_EmitterDocument == nil then
+            print("err: could not get emitter document")
+            goto emitter_entity_data_continue
+        end
+
+        local l_Emitter = EmitterTemplateData(l_EmitterDocument.templateData)
+        if l_Emitter == nil then
+            print("err: could not get emitter template data")
+            goto emitter_entity_data_continue
+        end
+
+        -- Make this emitter writable
+        l_Emitter:MakeWritable()
+
+        -- Change the maximum count of this emitter
+        --l_Emitter.maxCount = 91
+
+        print("changed emitter: " .. l_Emitter.name .. " max count to: " .. l_Emitter.maxCount)
+
+        ::emitter_entity_data_continue::
     end
 
-    -- Clear out the list and start over
+    return s_FireEffectBlueprint
+end
+
+-- TODO: Get the instance of the fire
+-- if not then import it from metro
+-- then after that we need to work on kit unlocks
+-- then after that we need to work on spawning kits
+-- then after that we need to disable the respawn ability server side
+-- then we implement the fadein/fadeout
+-- then we need to implement the end game
+-- do we throw some extra ric-flair on it with a plane sequence?
+
+function BRClient:StopPlayingAllEffects()
+    EffectManager:Clear()
     self.m_EffectHandles = { }
-
-    for l_EffectIndex = 0, p_Count do
-        self.m_EffectHandles[l_EffectIndex] = nil
-    end
-
-    self.m_CurrentRingNumPoints = p_NumPoints
-
-    -- Update effects
-    self:GetEffect()
 end
 
-function BRClient:GetEffect()
-    -- Get all of the fire effects that we needed
-end
 
 function BRClient:OnUpdateRadius(p_NewRadius, p_NewPosition, p_NumPoints)
-    print("Updating radius size to: " .. p_NewRadius .. " at: " .. p_NewPosition)
+    --print("Updating radius size to: " .. p_NewRadius .. " at: " .. p_NewPosition.x .. " " .. p_NewPosition.y .. " " .. p_NewPosition.z .. "numPoints: " .. p_NumPoints)
+    --print(self.m_CurrentRingNumPoints)
 
     -- Update the current radius
     self.m_CurrentRingRadius = p_NewRadius
     self.m_CurrentRingPosition = p_NewPosition
 
+    -- We only want to proceed if the effect is found
+    local s_EffectBlueprint = self:GetEffectBlueprint()
+    if s_EffectBlueprint == nil then
+        return
+    end
+
     -- Check to see if we need to re-create the effects
     if self.m_CurrentRingNumPoints ~= p_NumPoints then
-        self:PopulateEffectHandles(p_NumPoints)
+        self:StopPlayingAllEffects()
 
-        -- Create new effects
-        for l_EffectIndex = 0, self.m_CurrentRingNumPoints do
-            l_Vec = self:GetRaycastPosition(l_EffectIndex)
+        for l_EffectIndex = 1, p_NumPoints do
+            -- Raycase from above our point to try and find the proper Y coordinate
+            local l_Vec = self:GetRaycastPosition(l_EffectIndex)
 
-            l_Transform = LinearTransform()
+            -- Create a new transform for spawning the effect
+            local l_Transform = LinearTransform()
             l_Transform.trans = l_Vec
-            l_EffectHandle = EffectManager:PlayEffect(self.m_FireEntity, l_Transform, self.m_Params, true)
+
+            -- Play the effect
+            --print("playing effect at x: " .. l_Vec.x .. " y: " .. l_Vec.y .. " z: " .. l_Vec.z)
+            local l_EffectHandle = EffectManager:PlayEffect(self.m_FireEffectBlueprint, l_Transform, self.m_EffectParams, true)
             if EffectManager:IsEffectPlaying(l_EffectHandle) == false then
                 print("could not play effect")
                 goto effect_continue
             end
 
+            -- Save the effect handle to our array of effects
+            --print("updating idx: " .. l_EffectIndex .. " with handle:" .. l_EffectHandle)
             self.m_EffectHandles[l_EffectIndex] = l_EffectHandle
+
+            dsadsad = self.m_EffectHandles[l_EffectIndex]
+            if dsadsad == nil then
+                print("nil nil nil nil nil")
+            end
 
             ::effect_continue::
         end
+
+        self.m_CurrentRingNumPoints = p_NumPoints
     else
         -- Move existing effects
-        for l_EffectIndex = 0, self.m_CurrentRingNumPoints do
-            l_Vec = self:GetRaycastPosition(l_EffectIndex)
+        for l_EffectIndex = 1, self.m_CurrentRingNumPoints do
+            local l_Vec = self:GetRaycastPosition(l_EffectIndex)
 
-            l_Transform = LinearTransform()
+            local l_Transform = LinearTransform()
             l_Transform.trans = l_Vec
 
             -- Get the effect handle
-            l_EffectHandle = self.m_EffectHandles[l_EffectIndex]
+            --print(self.m_EffectHandles)
+            local l_EffectHandle = self.m_EffectHandles[l_EffectIndex]
             if l_EffectHandle == nil then
+                print("could not update transform idx: " .. l_EffectIndex)
                 goto effect_transform_continue
             end
 
-            EffectManager::TransformEffect(l_EffectHandle, l_Transform)
+            -- Move the effect to the new coordinates
+            --print("moving effect to x: " .. l_Vec.x .. " y: " .. l_Vec.y .. " z: " .. l_Vec.z)
+            EffectManager:SetEffectTransform(l_EffectHandle, l_Transform)
 
             ::effect_transform_continue::
         end
@@ -127,90 +198,53 @@ function BRClient:OnUpdateRadius(p_NewRadius, p_NewPosition, p_NumPoints)
 end
 
 function BRClient:OnUpdateState(p_AlivePlayersLeft, p_TeamsLeft, p_RoundNumber, p_CircleStatus)
+    -- Update the state provided by the server
     self.m_PlayersLeft = p_AlivePlayersLeft
     self.m_TeamsLeft = p_TeamsLeft
     self.m_RoundNumber = p_RoundNumber
     self.m_CurrentRingStatus = p_CircleStatus
 end
 
-function BRClient:OnRoundStart()
-end
-
-function BRClient:OnRoundEnd()
-end
-
-
-
-function BRClient:OnEngineUpdate(deltaTime, simulationDeltaTime)
-    -- Add deltaTime to our current timer
-    self.m_UpdateTimer = self.m_UpdateTimer + deltaTime
-
-    --local vec2 = Vec2(1, 2)
-    --local vec3 = Vec3(1, 2, 3)
-    --local vec4 = Vec4(1, 2, 3, 4)
-    --local lt = LinearTransform(vec3, vec3, vec3, vec3)
-
-    --local vec21 = vec2 * 2.0
-    --local vec31 = vec3 * 2.0
-    --local vec41 = vec4 * 2.0
-    --local lt1 = lt * 2.0
-
-    -- If we elapse a tick, reset the timer and fire an event
-    if self.m_UpdateTimer > self.m_UpdateFreq then
-        self.m_UpdateTimer = 0.0
-        self:OnClientTick()
-    end
-end
-
-
-function BRClient:OnClientTick()
-    print("OnClientTick: Called")
-
-    s_Up = Vec3(0, 1, 0)
-    s_Left = Vec3(1, 0, 0)
-    s_Forward = Vec3(0, 0, 1)
-
-    s_ResultVec = MathUtils:GetYPRFromULF(s_Up, s_Left, s_Forward)
-
-    print("res: " .. s_ResultVec.x .. " " .. s_ResultVec.y .. " " .. s_ResultVec.z)
-
-    s_LinearTransform = MathUtils:GetTransformFromYPR(3.1415926, 3.1615926, 3.1415926)
-    s_Up = s_LinearTransform.up
-    s_Left = s_LinearTransform.left
-    s_Forward = s_LinearTransform.forward
-    s_Trans = s_LinearTransform.trans
-
-    print("up: " .. s_Up.x .. " " .. s_Up.y .. " " .. s_Up.z)
-    print("foward: " .. s_LinearTransform.forward.x .. " " .. s_LinearTransform.forward.y .. " " .. s_LinearTransform.forward.z)
-    print("left: " .. s_LinearTransform.left.x .. " " .. s_LinearTransform.left.y .. " " .. s_LinearTransform.left.z)
-    print("trans: " .. s_LinearTransform.trans.x .. " " .. s_LinearTransform.trans.y .. " " .. s_LinearTransform.trans.z)
-end
-
 function BRClient:GetRaycastPosition(p_RingIndex)
     -- Get the x,z coordinate
-    s_Location = FirestormShared:GetPoint(self.m_CurrentRingPosition, p_RingIndex, self.m_CurrentRingNumPoints, self.m_CurrentRingRadius)
+    s_Location = self:GetPoint(self.m_CurrentRingPosition, p_RingIndex, self.m_CurrentRingNumPoints, self.m_CurrentRingRadius)
+    if s_Location == nil then
+        print("location is nil")
+    end
+
+    --print(s_Location)
 
     -- Place the raycast start location up higher on the y coordinate
     s_RaycastStartLocation = s_Location
-    s_RaycastStartLocation.y = s_RaycastStartLocation.y + self.m_RaycastStartHeight
+    s_RaycastStartLocation.y = s_RaycastStartLocation.y
 
     -- Place the end raycast point below our requested height
     s_RaycastEndLocation = s_Location
-    s_RaycastEndLocation.y = s_RaycastStartLocation.y - 100.0
+    s_RaycastEndLocation.y = s_RaycastStartLocation.y
 
     -- Do the actual raycast
-    s_Hit = RaycastManager:Raycast(s_RaycastStartLocation, s_RaycastEndLocation, CheckDetailMesh)
+    s_Hit = RaycastManager:Raycast(s_RaycastStartLocation, s_RaycastEndLocation, RayCastFlags.CheckDetailMesh | RayCastFlags.DontCheckCharacter)
     if s_Hit == nil then
         return s_Location
     end
 
     -- Get the hit position
     s_HitPosition = s_Hit.position
-    print("hit position: " .. s_HitPosition.x .. " " .. s_HitPosition.y .. " " .. s_HitPosition.z)
+    --print("hit position: " .. s_HitPosition.x .. " " .. s_HitPosition.y .. " " .. s_HitPosition.z)
 
     -- Return the position
     return s_HitPosition
 end
 
+function BRClient:GetPoint(p_Position, p_CircleIndex, p_NumPoints, p_CurrentRadius)
+    local s_Slice = (2 * math.pi) / p_NumPoints
+
+    local s_Angle = s_Slice * p_CircleIndex
+
+    local s_X = p_Position.x + p_CurrentRadius * math.cos(s_Angle)
+    local s_Z = p_Position.z + p_CurrentRadius * math.sin(s_Angle)
+
+    return Vec3(s_X, p_Position.y, s_Z)
+end
 
 return BRClient()
