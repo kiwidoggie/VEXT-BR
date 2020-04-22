@@ -20,20 +20,24 @@ function BRServer:__init()
 
     -- Current round number
     self.m_MaxRounds = 4
-    self.m_RoundNumber = 0
-    self.m_RoundWaitTime = 210.0 -- 3m30s
+    self.m_RoundNumber = 1
+    self.m_RoundWaitTime = 30.0 --210.0 -- 3m30s
     self.m_CurrentRoundWaitTime = 0.0
-    self.m_CloseTime = 60 -- 1m
+    self.m_CloseTime = 30.0 -- 60.0 -- 1m
     self.m_CurrentCloseTime = 0.0
 
     -- Keep the current game state
-    self.m_IsGameRunning = false
+    self.m_IsGameRunning = true
 
     -- Location of the center of the ring
     self.m_CurrentRingPosition = Vec3(-95.0356827, 69.8191986, -98.9525299)    --Vec3(0, 0, 0)
     self.m_CurrentRingStatus = FirestormShared.G_RING_STATIONARY
     self.m_CurrentRingMinimumRadius = 1.0      -- Minimum radius of the ring
     self.m_CurrentRingRadius = 25.0    -- Current radius of the ring
+
+    self.m_PreviousRingRadius = self.m_CurrentRingRadius -- Previous full size of ring
+    self.m_NextRingRadius = 0.0 -- Next ring size
+
     self.m_CurrentRingNumPoints = 30    -- Number of points around the ring
 end
 
@@ -55,18 +59,51 @@ function BRServer:OnEngineUpdate(p_DeltaTime, p_SimulationDeltaTime)
 
     if self.m_IsGameRunning == true then
         if self.m_CurrentRingStatus == FirestormShared.G_RING_STATIONARY then
+            -- Update the current round wait time
             self.m_CurrentRoundWaitTime = self.m_CurrentRoundWaitTime + p_DeltaTime
+
+            -- If we have expired, switch to the ring closing
             if self.m_CurrentRoundWaitTime > self.m_RoundWaitTime then
                 -- We need to change to the closing state, and increase the round count
                 self.m_CurrentRoundWaitTime = 0.0
                 self.m_RoundNumber = self.m_RoundNumber + 1
                 self.m_CurrentRingStatus = FirestormShared.G_RING_CLOSING
+
+                -- Update the previous ring radius and the next ring radius
+                self.m_PreviousRingRadius = self.m_CurrentRingRadius
+
+                -- 1/4 2/4 3/4 4/4
+                -- .25 .5 .75 1
+                -- 1 - .25
+                self.m_NextRingRadius = self.m_CurrentRingRadius * (1.0 - (self.m_RoundNumber / self.m_MaxRounds))
             end
         elseif self.m_CurrentRingStatus == FirestormShared.G_RING_CLOSING then
+            self.m_CurrentCloseTime = self.m_CurrentCloseTime + p_DeltaTime
 
+            -- Calcualte the position between the current time / total time
+            local s_FractionOfJourney = self.m_CurrentCloseTime / self.m_CloseTime
+
+            -- TODO: get the positions of each of the flames to the new radius
+            local s_NewRadius = self:Lerp(self.m_PreviousRingRadius, self.m_NextRingRadius, s_FractionOfJourney)
+            self.m_CurrentRingRadius = s_NewRadius
+
+            -- Check to see if our close time is completed, then we can switch back to the stationary time
+            if self.m_CurrentCloseTime > self.m_CloseTime then
+                -- We need to change back to the stationary state
+                self.m_CurrentCloseTime = 0.0
+                self.m_CurrentRingStatus = FirestormShared.G_RING_STATIONARY
+
+                -- Not sure if this is correct or not
+                self.m_PreviousRingRadius = self.m_NextRingRadius
+                self.m_NextRingRadius = self.m_CurrentRingRadius * (1.0 - (self.m_RoundNumber / self.m_MaxRounds))
+            end
         end
 
     end
+end
+
+function BRServer:Lerp(a, b, f)
+    return a + f * (b - a)
 end
 
 function BRServer:StateUpdate()

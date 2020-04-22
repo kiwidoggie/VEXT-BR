@@ -10,9 +10,10 @@ function BRClient:__init()
     -- Subscribe to the server event
     self.m_RadiusUpdateEvent = NetEvents:Subscribe("BR:UpdateRadius", self, self.OnUpdateRadius)
     self.m_UpdateStatsEvent = NetEvents:Subscribe("BR:UpdateState", self, self.OnUpdateState)
+    self.m_ExtensionLoadingEvent = Events:Subscribe("Extension:Loaded", self, self.OnExtensionLoaded)
     self.m_ExtensionUnloadingEvent = Events:Subscribe("Extension:Unloading", self, self.OnExtensionUnloading)
     self.m_LevelLoadingInfoEvent = Events:Subscribe("Level:LoadingInfo", self, self.OnLevelLoadingInfo)
-    --self.m_PartitionLoadedEvent = Events:Subscribe("Partition:Loaded", self, self.OnPartitionLoaded)
+    self.m_PartitionLoadedEvent = Events:Subscribe("Partition:Loaded", self, self.OnPartitionLoaded)
 
     -- Engine events
 
@@ -54,7 +55,29 @@ function BRClient:OnLevelLoadingInfo(p_Info)
     end
 end
 
+function BRClient:OnExtensionLoaded()
+end
+
+function BRClient:OnPartitionLoaded(p_Partition)
+    for _, l_Instance in pairs(p_Partition.instances) do
+        if l_Instance == nil then
+            goto instance_continue
+        end
+
+        -- Change the maximum amount of emitters
+        if l_Instance.typeInfo.name == "EmitterTemplateData" then
+            local l_EmitterTemplateData = EmitterTemplateData(l_Instance)
+
+            l_EmitterTemplateData:MakeWritable()
+            l_EmitterTemplateData.maxCount = 512
+        end
+
+        ::instance_continue::
+    end
+end
+
 function BRClient:OnExtensionUnloading()
+    -- Stop all of the fire effects and clear them out
     self:StopPlayingAllEffects()
 end
 
@@ -128,6 +151,13 @@ function BRClient:GetEffectBlueprint()
         print("changed emitter: " .. l_Emitter.name .. " max count to: " .. l_Emitter.maxCount)
 
         ::emitter_entity_data_continue::
+    end
+
+    local s_EmitterSystemSettingsContainer = ResourceManager:GetSettings("EmitterSystemSettings")
+    if s_EmitterSystemSettingsContainer ~= nil then
+        local s_EmitterSystemSettings = EmitterSystemSettings(s_EmitterSystemSettingsContainer)
+        s_EmitterSystemSettings.meshDrawCountLimit = 512
+        print("info: updated the emitter settings mesh draw count limit")
     end
 
     return s_FireEffectBlueprint
@@ -238,7 +268,7 @@ end
 
 function BRClient:GetRaycastPosition(p_RingIndex)
     -- Get the x,z coordinate
-    s_Location = self:GetPoint(self.m_CurrentRingPosition, p_RingIndex, self.m_CurrentRingNumPoints, self.m_CurrentRingRadius)
+    local s_Location = self:GetPoint(self.m_CurrentRingPosition, p_RingIndex, self.m_CurrentRingNumPoints, self.m_CurrentRingRadius)
     if s_Location == nil then
         print("location is nil")
     end
@@ -246,21 +276,21 @@ function BRClient:GetRaycastPosition(p_RingIndex)
     --print(s_Location)
 
     -- Place the raycast start location up higher on the y coordinate
-    s_RaycastStartLocation = s_Location
+    local s_RaycastStartLocation = s_Location
     s_RaycastStartLocation.y = s_RaycastStartLocation.y
 
     -- Place the end raycast point below our requested height
-    s_RaycastEndLocation = s_Location
+    local s_RaycastEndLocation = s_Location
     s_RaycastEndLocation.y = s_RaycastStartLocation.y
 
     -- Do the actual raycast
-    s_Hit = RaycastManager:Raycast(s_RaycastStartLocation, s_RaycastEndLocation, RayCastFlags.CheckDetailMesh | RayCastFlags.DontCheckCharacter)
+    local s_Hit = RaycastManager:Raycast(s_RaycastStartLocation, s_RaycastEndLocation, RayCastFlags.CheckDetailMesh | RayCastFlags.DontCheckCharacter)
     if s_Hit == nil then
         return s_Location
     end
 
     -- Get the hit position
-    s_HitPosition = s_Hit.position
+    local s_HitPosition = s_Hit.position
     --print("hit position: " .. s_HitPosition.x .. " " .. s_HitPosition.y .. " " .. s_HitPosition.z)
 
     -- Return the position
