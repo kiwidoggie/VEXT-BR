@@ -1,6 +1,5 @@
 class "BRClient"
 
---FirestormShared = require("__shared/FirestormShared")
 
 function BRClient:__init()
     -- Debug output
@@ -264,11 +263,13 @@ function BRClient:OnUpdateState(p_AlivePlayersLeft, p_TeamsLeft, p_RoundNumber, 
     self.m_TeamsLeft = p_TeamsLeft
     self.m_RoundNumber = p_RoundNumber
     self.m_CurrentRingStatus = p_CircleStatus
+
+    print("status: " .. p_CircleStatus .. " radius: " .. self.m_CurrentRingRadius)
 end
 
 function BRClient:GetRaycastPosition(p_RingIndex)
     -- Get the x,z coordinate
-    local s_Location = self:GetPoint(self.m_CurrentRingPosition, p_RingIndex, self.m_CurrentRingNumPoints, self.m_CurrentRingRadius)
+    local s_Location = FirestormShared.GetPoint(self.m_CurrentRingPosition, p_RingIndex, self.m_CurrentRingNumPoints, self.m_CurrentRingRadius)
     if s_Location == nil then
         print("location is nil")
     end

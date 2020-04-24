@@ -1,6 +1,6 @@
 class "BRShared"
 
-FirestormShared = require("__shared/FirestormShared")
+require("__shared/FirestormShared")
 
 function BRShared:__init()
     print("initializing battle royale shared")

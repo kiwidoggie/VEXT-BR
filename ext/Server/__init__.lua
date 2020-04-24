@@ -19,7 +19,7 @@ function BRServer:__init()
     self.m_CurrentFadeToBlackTime = 0.0
 
     -- Current round number
-    self.m_MaxRounds = 4
+    self.m_MaxRounds = 10
     self.m_RoundNumber = 1
     self.m_RoundWaitTime = 30.0 --210.0 -- 3m30s
     self.m_CurrentRoundWaitTime = 0.0
@@ -32,6 +32,7 @@ function BRServer:__init()
     -- Location of the center of the ring
     self.m_CurrentRingPosition = Vec3(-95.0356827, 69.8191986, -98.9525299)    --Vec3(0, 0, 0)
     self.m_CurrentRingStatus = FirestormShared.G_RING_STATIONARY
+
     self.m_CurrentRingMinimumRadius = 1.0      -- Minimum radius of the ring
     self.m_CurrentRingRadius = 25.0    -- Current radius of the ring
 
@@ -64,10 +65,12 @@ function BRServer:OnEngineUpdate(p_DeltaTime, p_SimulationDeltaTime)
 
             -- If we have expired, switch to the ring closing
             if self.m_CurrentRoundWaitTime > self.m_RoundWaitTime then
+                print("switching to closing")
                 -- We need to change to the closing state, and increase the round count
                 self.m_CurrentRoundWaitTime = 0.0
                 self.m_RoundNumber = self.m_RoundNumber + 1
                 self.m_CurrentRingStatus = FirestormShared.G_RING_CLOSING
+                --print("crs: " .. self.m_CurrentRingStatus)
 
                 -- Update the previous ring radius and the next ring radius
                 self.m_PreviousRingRadius = self.m_CurrentRingRadius
@@ -78,6 +81,9 @@ function BRServer:OnEngineUpdate(p_DeltaTime, p_SimulationDeltaTime)
                 self.m_NextRingRadius = self.m_CurrentRingRadius * (1.0 - (self.m_RoundNumber / self.m_MaxRounds))
             end
         elseif self.m_CurrentRingStatus == FirestormShared.G_RING_CLOSING then
+            -- Handle when the ring is in the closing state
+
+            -- Update the current close timer
             self.m_CurrentCloseTime = self.m_CurrentCloseTime + p_DeltaTime
 
             -- Calcualte the position between the current time / total time
@@ -85,13 +91,18 @@ function BRServer:OnEngineUpdate(p_DeltaTime, p_SimulationDeltaTime)
 
             -- TODO: get the positions of each of the flames to the new radius
             local s_NewRadius = self:Lerp(self.m_PreviousRingRadius, self.m_NextRingRadius, s_FractionOfJourney)
+            --print("newRadius: " .. s_NewRadius)
+
             self.m_CurrentRingRadius = s_NewRadius
 
             -- Check to see if our close time is completed, then we can switch back to the stationary time
             if self.m_CurrentCloseTime > self.m_CloseTime then
+                print("switching to stationary state")
                 -- We need to change back to the stationary state
                 self.m_CurrentCloseTime = 0.0
                 self.m_CurrentRingStatus = FirestormShared.G_RING_STATIONARY
+
+                --print("stationary crs: " .. self.m_CurrentRingStatus)
 
                 -- Not sure if this is correct or not
                 self.m_PreviousRingRadius = self.m_NextRingRadius
@@ -151,6 +162,7 @@ function BRServer:StateUpdate()
     end
 
     --print("broadcasting update")
+    print("currentRingStatus: " .. self.m_CurrentRingStatus)
     NetEvents:Broadcast("BR:UpdateState", s_TotalAlivePlayers, s_TeamsLeft, self.m_RoundNumber, self.m_CurrentRingStatus)
 end
 
@@ -197,7 +209,7 @@ function BRServer:DamagePlayerIfOutsideOfRadius(p_Player)
     -- Check to see if the player is outside of the radius
     if s_Distance > self.m_CurrentRingRadius then
         s_DamageInfo = DamageInfo()
-        s_DamageInfo.damage = 0.25
+        s_DamageInfo.damage = 0.25 * self.m_RoundNumber -- Increase the hurt based on round number
         s_DamageInfo.position = s_Position
         s_DamageInfo.direction = Vec3(0, 1, 0)
         s_DamageInfo.shouldForceDamage = true
