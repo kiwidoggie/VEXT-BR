@@ -65,7 +65,7 @@ function BRServer:__init()
     -- State of the current ring
     self.m_RingStatus = FirestormShared.G_RING_STATIONARY
     -- The smaller the circle, the less points we need to save on resources
-    self.m_RingPoints = 100
+    self.m_RingPoints = 33
 end
 
 function BRServer:ResetGameState()
@@ -100,7 +100,7 @@ function BRServer:ResetGameState()
     -- State of the current ring
     self.m_RingStatus = FirestormShared.G_RING_STATIONARY
     -- The smaller the circle, the less points we need to save on resources
-    self.m_RingPoints = 100
+    self.m_RingPoints = 33
     -- Current ring radius
     self.m_RingRadius = 0.0
     self.m_RingRadiusPart = 0.0
@@ -147,7 +147,6 @@ function BRServer:OnEngineUpdate(p_DeltaTime, p_SimulationDeltaTime)
         if self.m_UpdateRingTimer > self.m_UpdateRingMaxTime then
             self:UpdateRing(self.m_UpdateRingTimer)
             self.m_UpdateRingTimer = 0.0
-            
         end
     elseif self.m_GameState == FirestormShared.GAMESTATE_GAMEOVER then
         -- Handle the game over conditions
@@ -304,6 +303,11 @@ function BRServer:UpdateGameState()
             -- Disable the state for the rest of the in-game
             self.m_FadeToBlackState = FirestormServer.FadeToBlack_Disabled
         end
+
+        if s_TotalPlayerCount < 1 then
+            self:ResetGameState()
+        end
+        
     elseif self.m_GameState == FirestormShared.GAMESTATE_GAMEOVER then
     end
 

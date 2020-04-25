@@ -111,98 +111,61 @@ function BRClient:OnPartitionLoaded(p_Partition)
             local l_EmitterTemplateData = EmitterTemplateData(l_Instance)
 
             l_EmitterTemplateData:MakeWritable()
-            l_EmitterTemplateData.maxCount = 512
+            l_EmitterTemplateData.maxCount = 64
         end
 
-        ::instance_continue::
+        if l_Instance.instanceGuid == Guid("392D298D-CD2D-498F-AF2E-2C2F5B2AF137") then
+            s_FireEffectBlueprint = EffectBlueprint(l_Instance)
+
+            self.m_FireEffectBlueprint = s_FireEffectBlueprint
+
+            -- Modify the effect entity data
+            local s_EffectEntityData = EffectEntityData(s_FireEffectBlueprint.object)
+            if s_EffectEntityData ~= nil then
+                s_EffectEntityData:MakeWritable()
+                s_EffectEntityData.cullDistance = 999.9
+            end
+
+            for _, l_EntityData in pairs(s_EffectEntityData.components) do
+                -- Check to make sure we have a valid entity data
+                if l_EntityData ~= nil then
+                    -- We only want the emitter entity datas
+                    if l_EntityData.typeInfo.name == "EmitterEntityData" then
+                        -- Cast the untyped entity data to something we can use
+                        local l_EmitterEntityData = EmitterEntityData(l_EntityData)
+
+                        -- Get the emitter document
+                        local l_EmitterDocument = EmitterDocument(l_EmitterEntityData.emitter)
+                        if l_EmitterDocument ~= nil then
+                            -- Get the emitter template data
+                            local l_EmitterTemplateData = EmitterTemplateData(l_Emitter.templateData)
+                            if l_EmitterTemplateData ~= nil then
+                                print("emitter name: " .. l_EmitterTemplateData.name)
+                                l_EmitterTemplateData:MakeWritable()
+                                l_EmitterTemplateData.maxCount = 64
+
+                                print("changed emitter: " .. l_EmitterTemplateData.name .. " max count to: " .. l_EmitterTemplateData.maxCount)
+
+                            end
+                        end
+                    end
+                end
+            end
+        end
+            ::instance_continue::
+    end
+
+    local s_EmitterSystemSettingsContainer = ResourceManager:GetSettings("EmitterSystemSettings")
+    if s_EmitterSystemSettingsContainer ~= nil then
+        local s_EmitterSystemSettings = EmitterSystemSettings(s_EmitterSystemSettingsContainer)
+        s_EmitterSystemSettings.meshDrawCountLimit = 64
+        print("info: updated the emitter settings mesh draw count limit")
     end
 end
 
 function BRClient:OnExtensionUnloading()
     -- Stop all of the fire effects and clear them out
     self:StopPlayingAllEffects()
-end
-
-function BRClient:GetEffectBlueprint()
-    -- Wait until we get the ready status
-    if self.m_Ready == false then
-        return
-    end
-
-    -- Check to see if we already got the blueprint
-    if self.m_FireEffectBlueprint ~= nil then
-        return self.m_FireEffectBlueprint
-    end
-
-    -- Get the EffectBlueprint FX/Ambient/Generic/FireSmoke/Fire/Generic/FX_Amb_Generic_Fire_L_01
-    s_FireEffectResource = ResourceManager:SearchForInstanceByGUID(Guid('392D298D-CD2D-498F-AF2E-2C2F5B2AF137'))
-    if s_FireEffectResource == nil then
-        print("could not find fire effect resource")
-        return nil
-    end
-
-    print("get effect blueprint")
-    s_FireEffectBlueprint = EffectBlueprint(s_FireEffectResource)
-    if s_FireEffectBlueprint == nil then
-        print("could not find fire effect blueprint")
-        return nil
-    end
-
-    print("assigning the effect blueprint")
-    self.m_FireEffectBlueprint = s_FireEffectBlueprint
-
-    -- Modify the effect entity data
-    local s_EffectEntityData = EffectEntityData(s_FireEffectBlueprint.object)
-    if s_EffectEntityData == nil then
-        print("err: could not get effect entity data")
-        return s_FireEffectBlueprint
-    end
-
-    for _, l_EntityData in pairs(s_EffectEntityData.components) do
-        -- Check to make sure we have a valid entity data
-        if l_EntityData == nil then
-            goto emitter_entity_data_continue
-        end
-
-        -- We only want the emitter entity datas
-        if l_EntityData.typeInfo.name ~= "EmitterEntityData" then
-            goto emitter_entity_data_continue
-        end
-
-        local l_EmitterEntityData = EmitterEntityData(l_EntityData)
-
-        -- Get the emitter document
-        local l_EmitterDocument = EmitterDocument(l_EmitterEntityData.emitter)
-        if l_EmitterDocument == nil then
-            print("err: could not get emitter document")
-            goto emitter_entity_data_continue
-        end
-
-        local l_Emitter = EmitterTemplateData(l_EmitterDocument.templateData)
-        if l_Emitter == nil then
-            print("err: could not get emitter template data")
-            goto emitter_entity_data_continue
-        end
-
-        -- Make this emitter writable
-        l_Emitter:MakeWritable()
-
-        -- Change the maximum count of this emitter
-        l_Emitter.maxCount = 512
-
-        print("changed emitter: " .. l_Emitter.name .. " max count to: " .. l_Emitter.maxCount)
-
-        ::emitter_entity_data_continue::
-    end
-
-    local s_EmitterSystemSettingsContainer = ResourceManager:GetSettings("EmitterSystemSettings")
-    if s_EmitterSystemSettingsContainer ~= nil then
-        local s_EmitterSystemSettings = EmitterSystemSettings(s_EmitterSystemSettingsContainer)
-        s_EmitterSystemSettings.meshDrawCountLimit = 512
-        print("info: updated the emitter settings mesh draw count limit")
-    end
-
-    return s_FireEffectBlueprint
 end
 
 -- TODO: Get the instance of the fire
@@ -221,7 +184,7 @@ end
 
 
 function BRClient:OnUpdateRadius(p_NewRadius, p_NewPosition, p_NumPoints)
-    print("Updating radius size to: " .. p_NewRadius .. " at: " .. p_NewPosition.x .. " " .. p_NewPosition.y .. " " .. p_NewPosition.z .. "numPoints: " .. p_NumPoints)
+    --print("Updating radius size to: " .. p_NewRadius .. " at: " .. p_NewPosition.x .. " " .. p_NewPosition.y .. " " .. p_NewPosition.z .. "numPoints: " .. p_NumPoints)
     --print(self.m_CurrentRingNumPoints)
 
     -- Update the current radius
@@ -233,7 +196,7 @@ function BRClient:OnUpdateRadius(p_NewRadius, p_NewPosition, p_NumPoints)
     end
 
     -- We only want to proceed if the effect is found
-    local s_EffectBlueprint = self:GetEffectBlueprint()
+    local s_EffectBlueprint = self.m_FireEffectBlueprint
     if s_EffectBlueprint == nil then
         return
     end
