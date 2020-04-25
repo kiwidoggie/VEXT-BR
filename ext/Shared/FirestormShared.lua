@@ -3,6 +3,10 @@ FirestormShared =
     G_RING_STATIONARY = 0,
     G_RING_CLOSING = 1,
 
+    GAMESTATE_WARMUP = 0,
+    GAMESTATE_INGAME = 1,
+    GAMESTATE_GAMEOVER = 2,
+
     GetPoint = function(p_Position, p_CircleIndex, p_NumPoints, p_CurrentRadius)
         local s_Slice = (2 * math.pi) / p_NumPoints
 

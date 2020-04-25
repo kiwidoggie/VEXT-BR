@@ -7,13 +7,32 @@ function BRClient:__init()
 
     -- BR:RadiusUpdate([float] p_NewRadius, [Vec3] p_NewPosition)
     -- Subscribe to the server event
-    self.m_RadiusUpdateEvent = NetEvents:Subscribe("BR:UpdateRadius", self, self.OnUpdateRadius)
-    self.m_UpdateStatsEvent = NetEvents:Subscribe("BR:UpdateState", self, self.OnUpdateState)
+    self.m_RadiusUpdateEvent = NetEvents:Subscribe("BR:RingUpdate", self, self.OnUpdateRadius)
+    self.m_UpdateStatsEvent = NetEvents:Subscribe("BR:GameStateUpdate", self, self.OnUpdateState)
     self.m_ExtensionLoadingEvent = Events:Subscribe("Extension:Loaded", self, self.OnExtensionLoaded)
     self.m_ExtensionUnloadingEvent = Events:Subscribe("Extension:Unloading", self, self.OnExtensionUnloading)
     self.m_LevelLoadingInfoEvent = Events:Subscribe("Level:LoadingInfo", self, self.OnLevelLoadingInfo)
     self.m_PartitionLoadedEvent = Events:Subscribe("Partition:Loaded", self, self.OnPartitionLoaded)
+    self.m_LevelLoadResourceEvent = Events:Subscribe("Level:LoadResources", self, self.OnLoadResources)
+    
+    -- Hooks
+    self.m_LoadBundlesHook = Hooks:Install("ResourceManager:LoadBundles", 100, self, self.OnLoadBundles)
+    -- Debug Commands
+    self.m_PrintPositionCommand = Console:Register("PrintPos", "Prints player position", function(p_Args)
+        local s_LocalPlayer = PlayerManager:GetLocalPlayer()
+        if s_LocalPlayer == nil then
+            return "invalid player"
+        end
 
+        local s_LocalSoldier = s_LocalPlayer.soldier
+        if s_LocalSoldier == nil then
+            return "invalid soldier"
+        end
+
+        local s_LocalPos = s_LocalSoldier.position
+
+        return "xyz: " .. s_LocalPos.x .. ", " .. s_LocalPos.y .. ", " .. s_LocalPos.z
+    end)
     -- Engine events
 
     -- Hold ring information, this is updated by the server
@@ -42,6 +61,30 @@ function BRClient:__init()
     self.m_LevelName = ""
 
     self.m_Ready = false
+end
+
+function BRClient:OnLoadBundles(p_Hook, p_Bundles, p_Compartment)
+    --[[if #bundles == 1 and 
+        bundles[1] == SharedUtils:GetLevelName() and 
+        SharedUtils:GetLevelName():find("Levels/MP_Subway") == nil then
+            print("Injecting MP Bundles.")
+
+            bundles = 
+            {
+                "Levels/MP_Subway/MP_Subway",
+                "Levels/MP_Subway/DeathMatch",
+                "Levels/MP_Subway/SquadDeathMatch",
+                bundles[1],
+            }
+            
+        end
+
+        p_Hook:Pass(p_Bundles, p_Compartment)
+    end--]]
+end
+
+function BRClient:OnLoadResources()
+    --ResourceManager:MountSuperbundle("Levels/MP_Subway/MP_Subway")
 end
 
 function BRClient:OnLevelLoadingInfo(p_Info)
@@ -178,7 +221,7 @@ end
 
 
 function BRClient:OnUpdateRadius(p_NewRadius, p_NewPosition, p_NumPoints)
-    --print("Updating radius size to: " .. p_NewRadius .. " at: " .. p_NewPosition.x .. " " .. p_NewPosition.y .. " " .. p_NewPosition.z .. "numPoints: " .. p_NumPoints)
+    print("Updating radius size to: " .. p_NewRadius .. " at: " .. p_NewPosition.x .. " " .. p_NewPosition.y .. " " .. p_NewPosition.z .. "numPoints: " .. p_NumPoints)
     --print(self.m_CurrentRingNumPoints)
 
     -- Update the current radius
@@ -264,7 +307,7 @@ function BRClient:OnUpdateState(p_AlivePlayersLeft, p_TeamsLeft, p_RoundNumber, 
     self.m_RoundNumber = p_RoundNumber
     self.m_CurrentRingStatus = p_CircleStatus
 
-    print("status: " .. p_CircleStatus .. " radius: " .. self.m_CurrentRingRadius)
+    --print("status: " .. p_CircleStatus .. " radius: " .. self.m_CurrentRingRadius)
 end
 
 function BRClient:GetRaycastPosition(p_RingIndex)
