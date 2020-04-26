@@ -10,8 +10,8 @@ FirestormServer =
     Default_MinPlayerCount = 4,
 
     -- Ring defaults
-    Default_RingCloseTime = 30.0, -- In seconds
-    Default_RingStationaryTime = 30.0, -- In Seconds
+    Default_RingCloseTime = 5.0, -- In seconds
+    Default_RingStationaryTime = 5.0, -- In Seconds
     Default_RingRadius = 100.0, -- Should be re-calculated based on spawn bb
     Default_UpdateRingTime = 0.5, -- In seconds
     
@@ -65,7 +65,7 @@ function BRServer:__init()
     -- State of the current ring
     self.m_RingStatus = FirestormShared.G_RING_STATIONARY
     -- The smaller the circle, the less points we need to save on resources
-    self.m_RingPoints = 33
+    self.m_RingPoints = 32
 end
 
 function BRServer:ResetGameState()
@@ -100,7 +100,7 @@ function BRServer:ResetGameState()
     -- State of the current ring
     self.m_RingStatus = FirestormShared.G_RING_STATIONARY
     -- The smaller the circle, the less points we need to save on resources
-    self.m_RingPoints = 33
+    self.m_RingPoints = 32
     -- Current ring radius
     self.m_RingRadius = 0.0
     self.m_RingRadiusPart = 0.0
@@ -421,7 +421,7 @@ function BRServer:DamagePlayerIfOutsideOfRadius(p_Player)
         s_DamageInfo.direction = Vec3(0, 1, 0)
         s_DamageInfo.shouldForceDamage = true
 
-        --s_Soldier:ApplyDamage(s_DamageInfo)
+        s_Soldier:ApplyDamage(s_DamageInfo)
     end
 end
 

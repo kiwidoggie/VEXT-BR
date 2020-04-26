@@ -61,6 +61,9 @@ function BRClient:__init()
     self.m_LevelName = ""
 
     self.m_Ready = false
+
+    -- Seriously frostbite >_>
+    self.m_LazyLoadedIds = { }
 end
 
 function BRClient:OnLoadBundles(p_Hook, p_Bundles, p_Compartment)
@@ -111,7 +114,34 @@ function BRClient:OnPartitionLoaded(p_Partition)
             local l_EmitterTemplateData = EmitterTemplateData(l_Instance)
 
             l_EmitterTemplateData:MakeWritable()
-            l_EmitterTemplateData.maxCount = 64
+            l_EmitterTemplateData.maxCount = 32
+        end
+
+        -- Check any of the lazy loaded guids
+        for _, l_LazyLoadedId in pairs(self.m_LazyLoadedIds) do
+            if l_LazyLoadedId == nil then
+                goto lazy_loaded_id_continue
+            end
+
+            -- Check to see if this is one of the lazy loaded EmitterDocuments
+            if l_Instance.instanceGuid == l_LazyLoadedId then
+                -- I think this is how this works, not sure
+                local l_EmitterDocument = EmitterDocument(l_Instance)
+                if l_EmitterDocument ~= nil then
+                    -- Get the emitter template data
+                    local l_EmitterTemplateData = EmitterTemplateData(l_EmitterDocument.templateData)
+                    if l_EmitterTemplateData ~= nil then
+                        print("emitter name: " .. l_EmitterTemplateData.name)
+                        l_EmitterTemplateData:MakeWritable()
+                        l_EmitterTemplateData.maxCount = 32
+
+                        print("changed emitter: " .. l_EmitterTemplateData.name .. " max count to: " .. l_EmitterTemplateData.maxCount)
+
+                    end
+                end
+            end
+
+            ::lazy_loaded_id_continue::
         end
 
         if l_Instance.instanceGuid == Guid("392D298D-CD2D-498F-AF2E-2C2F5B2AF137") then
@@ -123,7 +153,8 @@ function BRClient:OnPartitionLoaded(p_Partition)
             local s_EffectEntityData = EffectEntityData(s_FireEffectBlueprint.object)
             if s_EffectEntityData ~= nil then
                 s_EffectEntityData:MakeWritable()
-                s_EffectEntityData.cullDistance = 999.9
+                s_EffectEntityData.cullDistance = 9999.9
+                s_EffectEntityData.maxInstanceCount = 32
             end
 
             for _, l_EntityData in pairs(s_EffectEntityData.components) do
@@ -133,21 +164,14 @@ function BRClient:OnPartitionLoaded(p_Partition)
                     if l_EntityData.typeInfo.name == "EmitterEntityData" then
                         -- Cast the untyped entity data to something we can use
                         local l_EmitterEntityData = EmitterEntityData(l_EntityData)
+                        l_EmitterEntityData:MakeWritable()
 
-                        -- Get the emitter document
-                        local l_EmitterDocument = EmitterDocument(l_EmitterEntityData.emitter)
-                        if l_EmitterDocument ~= nil then
-                            -- Get the emitter template data
-                            local l_EmitterTemplateData = EmitterTemplateData(l_Emitter.templateData)
-                            if l_EmitterTemplateData ~= nil then
-                                print("emitter name: " .. l_EmitterTemplateData.name)
-                                l_EmitterTemplateData:MakeWritable()
-                                l_EmitterTemplateData.maxCount = 64
+                        l_EmitterEntityData.maxInstanceCount = 32
 
-                                print("changed emitter: " .. l_EmitterTemplateData.name .. " max count to: " .. l_EmitterTemplateData.maxCount)
-
-                            end
-                        end
+                        -- Get the emitter document, this is lazy loaded
+                        local l_EmitterDocumentId = l_EmitterEntityData.emitter.instanceGuid
+                        table.insert(self.m_LazyLoadedIds, l_EmitterDocumentId)
+                        print("Added EmitterDocument to list of lazy loaded ids")
                     end
                 end
             end
@@ -158,8 +182,8 @@ function BRClient:OnPartitionLoaded(p_Partition)
     local s_EmitterSystemSettingsContainer = ResourceManager:GetSettings("EmitterSystemSettings")
     if s_EmitterSystemSettingsContainer ~= nil then
         local s_EmitterSystemSettings = EmitterSystemSettings(s_EmitterSystemSettingsContainer)
-        s_EmitterSystemSettings.meshDrawCountLimit = 64
-        print("info: updated the emitter settings mesh draw count limit")
+        s_EmitterSystemSettings.meshDrawCountLimit = 32
+        --print("info: updated the emitter settings mesh draw count limit")
     end
 end
 
